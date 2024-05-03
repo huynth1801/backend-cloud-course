@@ -1,4 +1,3 @@
-// XXXXXXXXXXXXXX-create-product.js
 'use strict';
 module.exports = {
   up: async (queryInterface, Sequelize) => {
@@ -13,7 +12,18 @@ module.exports = {
         type: Sequelize.STRING,
         allowNull: false
       },
-      // Define other attributes of the product
+      price: {
+        type: Sequelize.FLOAT,
+        allowNull: false
+      },
+      description: {
+        type: Sequelize.STRING,
+        allowNull: true 
+      },
+      tenantId: {
+        type: Sequelize.UUID,
+        allowNull: false // Ensure tenantId is not null
+      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE
@@ -22,6 +32,18 @@ module.exports = {
         allowNull: false,
         type: Sequelize.DATE
       }
+    });
+
+    // Add foreign key constraint
+    await queryInterface.addConstraint('Products', {
+      fields: ['tenantId'],
+      type: 'foreign key',
+      name: 'fk_tenantId_product',
+      references: {
+        table: 'Tenants',
+        field: 'id'
+      },
+      onDelete: 'CASCADE' // Ensure referential integrity
     });
   },
   down: async (queryInterface, Sequelize) => {
