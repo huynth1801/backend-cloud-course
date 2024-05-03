@@ -1,15 +1,59 @@
 // controller.js
-
 const express = require("express");
 const path = require("path");
 const connection = require("./database").pool;
 const bcrypt = require("bcrypt");
+const {Tenant, User} = require('./models');
+const { v4: uuidv4 } = require('uuid'); // Import uuidv4
+const { error } = require("console");
+const { create } = require("domain");
 
 const router = express.Router();
 
 router.get("/", function (request, response) {
   // Render login template
   response.sendFile(path.join(__dirname + "/login.html"));
+});
+
+// register
+router.post('/register', async (request, response) => {
+  const { username, password, email } = request.body;
+
+  // Kiểm tra xem có username và password được cung cấp không
+  if (!username || !password || !email) {
+    return response.status(400).json({
+      error: "Please provide username, password, and email",
+    });
+  }
+
+  try {
+    // Tạo một UUID cho tenantId
+    const tenantId = uuidv4();
+
+    // generate a new tenant
+    const tenant = await Tenant.create({ id: tenantId });
+    console.log(tenant);
+
+    // Hashed password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Tạo một user mới với thông tin được cung cấp và tenantId
+    const newUser = await User.create({
+      username: username,
+      password: hashedPassword,
+      email: email,
+      TenantId: tenant.id
+    });
+
+    // Trả về thông báo thành công cùng với tenantId
+    return response.status(201).json({
+      message: "User registered successfully",
+      tenantId: tenantId,
+    });
+  } catch (error) {
+    console.error(error.message);
+    return response.status(500).json({ error: "Internal server error" });
+  }
 });
 
 router.post("/login", function (req, res) {
