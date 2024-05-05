@@ -20,29 +20,32 @@ router.get("/", function (request, response) {
 
 // register
 router.post('/register', async (request, response) => {
-  const { username, password, email } = request.body;
+  const { username, password, email, domain } = request.body;
 
-  // Kiểm tra xem có username và password được cung cấp không
-  if (!username || !password || !email) {
+  if (!username || !password || !email || !domain) {
     return response.status(400).json({
-      error: "Please provide username, password, and email",
+      error: "Please provide username, password, email, and domain",
     });
   }
 
   try {
-    // Tạo một UUID cho tenantId
-    const tenantId = uuidv4();
+    let tenant;
 
-    // Tạo một tên tenant duy nhất bằng cách sử dụng UUID
-    const tenantName = uuidv4();
+    // Check existing domain
+    const existingTenant = await Tenant.findOne({ where: { domain } });
 
-    // generate a new tenant
-    const tenant = await Tenant.create({ id: tenantId, name: tenantName });
+    if (existingTenant) {
+      tenant = existingTenant;
+    } else {
+      const tenantId = uuidv4();
+      const tenantName = uuidv4();
+      tenant = await Tenant.create({ id: tenantId, name: tenantName, domain });
+    }
 
     // Hashed password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Tạo một user mới với thông tin được cung cấp và tenantId
+    // 
     const newUser = await User.create({
       username: username,
       password: hashedPassword,
@@ -52,13 +55,15 @@ router.post('/register', async (request, response) => {
 
     return response.status(201).json({
       message: "User registered successfully",
-      tenantId: tenantId,
+      tenantId: tenant.id,
+      newUser: newUser
     });
   } catch (error) {
     console.error(error.message);
     return response.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 // Route to create a new product for a specific tenant
 router.post('/tenants/:tenantId/products', async (request, response) => {
@@ -99,7 +104,6 @@ router.post("/login", async (request, response) => {
 
   try {
     const user = await User.findOne({where: {username}});
-    console.log(user);
 
     const isPasswordValid = user === null ? false : bcrypt.compare(password, user.password);
 
@@ -107,9 +111,13 @@ router.post("/login", async (request, response) => {
       return response.status(401).json({error: 'Invalid username or password'})
     }
 
+    // Trích xuất tenantId từ user hoặc từ cơ sở dữ liệu nếu cần
+    const tenantId = user.tenantId; 
+
     const userForToken = {
       username: user.username,
-      id: user.id
+      id: user.id,
+      tenantId: tenantId 
     }
 
     const token = jwt.sign(
@@ -118,7 +126,10 @@ router.post("/login", async (request, response) => {
       { expiresIn: 60*60}
     )
 
-    return response.status(200).json({ token})
+    return response.status(200).json({ 
+      name: username,
+      token: token
+    })
   }
   catch (error) {
     console.error('Error logging in:', error);
@@ -126,32 +137,35 @@ router.post("/login", async (request, response) => {
   }
 });
 
-// Xử lý yêu cầu trang chủ
 
-router.get("/home", function (request, response) {
-  if (request.session.loggedin) {
-    response.redirect("http://localhost:5173");
-  } else {
-    response.send("Please login to view this page!");
+router.get("/products", async (request, response) => {
+  const token = getTokenFrom(request);
+  console.log(token);
+  if(!token) {
+    return response.status(401).json({error: 'Unauthorized'})
   }
-  response.end();
+
+  try {
+    const decodedToken = jwt.verify(token, 'my_secret');
+    console.log(decodedToken);
+
+    const tenantId = decodedToken.tenantId;
+
+    const products = await Product.findAll({where: tenantId});
+
+    return response.status(200).json({products})
+  } catch(error) {
+    console.error('Error retreaving products:', error)
+    return response.status(500).json({error: 'Internal server error'})
+  }
 });
 
-router.get("/products", function (request, response) {
-  connection.query(
-    "SELECT * FROM products",
-    function (err, results, field) {
-      if (err) {
-        console.error(err.message);
-        return res
-          .status(500)
-          .json({ error: "Internal server error" });
-      }
-
-      // Response data
-      return response.status(200).json(results);
-    }
-  );
-});
+const getTokenFrom = request => {
+  const authorization = request.get('authorization');
+  if(authorization && authorization.startsWith('Bearer ')) {
+    return authorization.replace('Bearer ', '')
+  }
+  return null
+}
 
 module.exports = router;

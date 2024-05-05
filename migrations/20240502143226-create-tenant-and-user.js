@@ -5,15 +5,18 @@ module.exports = {
       id: {
         allowNull: false,
         primaryKey: true,
-        type: Sequelize.UUID, // Sử dụng UUID
-        defaultValue: Sequelize.UUIDV4 // Tạo UUID mặc định
+        type: Sequelize.UUID,
+        defaultValue: Sequelize.UUIDV4
       },
       name: {
         type: Sequelize.STRING,
-        allowNull: false,
-        defaultValue: 'Ternant_1'
+        allowNull: false
       },
-      // Other tenant attributes
+      domain: {
+        type: Sequelize.STRING,
+        allowNull: false,
+        unique: true
+      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE
@@ -44,7 +47,7 @@ module.exports = {
         allowNull: false
       },
       tenantId: {
-        type: Sequelize.UUID, // Sử dụng UUID
+        type: Sequelize.UUID,
         allowNull: false,
         references: {
           model: 'Tenants',
@@ -52,7 +55,6 @@ module.exports = {
         },
         onDelete: 'CASCADE'
       },
-      // Other user attributes
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE

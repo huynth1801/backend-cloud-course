@@ -5,7 +5,12 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
       defaultValue: DataTypes.UUIDV4
     },
-    name: DataTypes.STRING
+    name: DataTypes.STRING,
+    domain: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true
+    }
   });
 
   Tenant.associate = (models) => {
