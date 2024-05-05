@@ -104,6 +104,7 @@ router.post("/login", async (request, response) => {
 
   try {
     const user = await User.findOne({where: {username}});
+    console.log(user);
 
     const isPasswordValid = user === null ? false : bcrypt.compare(password, user.password);
 
@@ -112,7 +113,8 @@ router.post("/login", async (request, response) => {
     }
 
     // Trích xuất tenantId từ user hoặc từ cơ sở dữ liệu nếu cần
-    const tenantId = user.tenantId; 
+    const tenantId = user.TenantId;
+    console.log(tenantId);
 
     const userForToken = {
       username: user.username,
@@ -140,20 +142,20 @@ router.post("/login", async (request, response) => {
 
 router.get("/products", async (request, response) => {
   const token = getTokenFrom(request);
-  console.log(token);
   if(!token) {
     return response.status(401).json({error: 'Unauthorized'})
   }
 
   try {
     const decodedToken = jwt.verify(token, 'my_secret');
-    console.log(decodedToken);
+    console.log('decodedToken', decodedToken);
 
     const tenantId = decodedToken.tenantId;
+    console.log(tenantId);
 
-    const products = await Product.findAll({where: tenantId});
+    const products = await Product.findAll({where:  { tenantId: tenantId }});
 
-    return response.status(200).json({products})
+    return response.status(200).json(products)
   } catch(error) {
     console.error('Error retreaving products:', error)
     return response.status(500).json({error: 'Internal server error'})
