@@ -198,13 +198,13 @@ router.post("/orders", async (request, response) => {
 
   try {
     const decodedToken = jwt.verify(token, "my_secret");
-    console.log(decodedToken);
 
     const tenantId = decodedToken.tenantId;
-    const user = decodedToken.username;
-    console.log(user);
+    const username = decodedToken.username;
+    const userId = decodedToken.id;
 
-    const { productName, amount, quantity, userId } =
+
+    const { productName, amount, quantity } =
       request.body;
 
     const newInvoice = await Invoice.create({
@@ -213,7 +213,7 @@ router.post("/orders", async (request, response) => {
       productName: productName,
       quantity: quantity,
       tenantId: tenantId,
-      username: user,
+      username: username,
       userId: userId,
     });
 
