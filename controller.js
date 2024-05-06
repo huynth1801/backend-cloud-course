@@ -3,12 +3,13 @@ const express = require("express");
 const path = require("path");
 const connection = require("./database").pool;
 const bcrypt = require("bcrypt");
-const {Tenant, User} = require('./models');
-const { v4: uuidv4 } = require('uuid'); // Import uuidv4
+const { Tenant, User } = require("./models");
+const { v4: uuidv4 } = require("uuid"); // Import uuidv4
 const { error } = require("console");
 const { create } = require("domain");
-const {Product} = require('./models')
-const jwt = require('jsonwebtoken');
+const { Product } = require("./models");
+const { Invoice } = require("./models");
+const jwt = require("jsonwebtoken");
 const { where } = require("sequelize");
 
 const router = express.Router();
@@ -19,12 +20,14 @@ router.get("/", function (request, response) {
 });
 
 // register
-router.post('/register', async (request, response) => {
-  const { username, password, email, domain } = request.body;
+router.post("/register", async (request, response) => {
+  const { username, password, email, domain } =
+    request.body;
 
   if (!username || !password || !email || !domain) {
     return response.status(400).json({
-      error: "Please provide username, password, email, and domain",
+      error:
+        "Please provide username, password, email, and domain",
     });
   }
 
@@ -32,65 +35,78 @@ router.post('/register', async (request, response) => {
     let tenant;
 
     // Check existing domain
-    const existingTenant = await Tenant.findOne({ where: { domain } });
+    const existingTenant = await Tenant.findOne({
+      where: { domain },
+    });
 
     if (existingTenant) {
       tenant = existingTenant;
     } else {
       const tenantId = uuidv4();
       const tenantName = uuidv4();
-      tenant = await Tenant.create({ id: tenantId, name: tenantName, domain });
+      tenant = await Tenant.create({
+        id: tenantId,
+        name: tenantName,
+        domain,
+      });
     }
 
     // Hashed password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 
+    //
     const newUser = await User.create({
+      id: uuidv4(),
       username: username,
       password: hashedPassword,
       email: email,
-      TenantId: tenant.id
+      TenantId: tenant.id,
     });
 
     return response.status(201).json({
       message: "User registered successfully",
       tenantId: tenant.id,
-      newUser: newUser
+      newUser: newUser,
     });
   } catch (error) {
     console.error(error.message);
-    return response.status(500).json({ error: "Internal server error" });
+    return response
+      .status(500)
+      .json({ error: "Internal server error" });
   }
 });
-
 
 // Route to create a new product for a specific tenant
-router.post('/tenants/:tenantId/products', async (request, response) => {
-  try {
-    // Get info from request body
-    const { name, price, description } = request.body;
-    const { tenantId } = request.params;
-    console.log(tenantId);
+router.post(
+  "/tenants/:tenantId/products",
+  async (request, response) => {
+    try {
+      // Get info from request body
+      const { name, price, description } = request.body;
+      const { tenantId } = request.params;
+      console.log(tenantId);
 
-    // Generate new product
-    const newProduct = await Product.create({
-      name: name,
-      price: price,
-      description: description,
-      tenantId: tenantId 
-    });
-    console.log(newProduct);
+      // Generate new product
+      const newProduct = await Product.create({
+        name: name,
+        price: price,
+        description: description,
+        tenantId: tenantId,
+      });
+      console.log(newProduct);
 
-    return response.status(200).json({
-      message: "Product was created successfully",
-      product: newProduct
-    });
-  } catch (error) {
-    console.error("Error creating product", error);
-    return response.status(500).json({ error: "Internal server error" });
+      return response.status(200).json({
+        message: "Product was created successfully",
+        product: newProduct,
+      });
+    } catch (error) {
+      console.error("Error creating product", error);
+      return response
+        .status(500)
+        .json({ error: "Internal server error" });
+    }
   }
-});
+);
 
 // Login
 router.post("/login", async (request, response) => {
@@ -103,13 +119,20 @@ router.post("/login", async (request, response) => {
   }
 
   try {
-    const user = await User.findOne({where: {username}});
+    const user = await User.findOne({
+      where: { username },
+    });
     console.log(user);
 
-    const isPasswordValid = user === null ? false : bcrypt.compare(password, user.password);
+    const isPasswordValid =
+      user === null
+        ? false
+        : bcrypt.compare(password, user.password);
 
-    if(!(user && isPasswordValid)) {
-      return response.status(401).json({error: 'Invalid username or password'})
+    if (!(user && isPasswordValid)) {
+      return response
+        .status(401)
+        .json({ error: "Invalid username or password" });
     }
 
     // Trích xuất tenantId từ user hoặc từ cơ sở dữ liệu nếu cần
@@ -119,55 +142,99 @@ router.post("/login", async (request, response) => {
     const userForToken = {
       username: user.username,
       id: user.id,
-      tenantId: tenantId 
-    }
+      tenantId: tenantId,
+    };
 
-    const token = jwt.sign(
-      userForToken,
-      'my_secret',
-      { expiresIn: 60*60}
-    )
+    const token = jwt.sign(userForToken, "my_secret", {
+      expiresIn: 60 * 60,
+    });
 
-    return response.status(200).json({ 
+    return response.status(200).json({
       name: username,
-      token: token
-    })
-  }
-  catch (error) {
-    console.error('Error logging in:', error);
-    response.status(500).json({ error: 'Internal server error' });
+      token: token,
+    });
+  } catch (error) {
+    console.error("Error logging in:", error);
+    response
+      .status(500)
+      .json({ error: "Internal server error" });
   }
 });
-
 
 router.get("/products", async (request, response) => {
   const token = getTokenFrom(request);
-  if(!token) {
-    return response.status(401).json({error: 'Unauthorized'})
+  if (!token) {
+    return response
+      .status(401)
+      .json({ error: "Unauthorized" });
   }
 
   try {
-    const decodedToken = jwt.verify(token, 'my_secret');
-    console.log('decodedToken', decodedToken);
+    const decodedToken = jwt.verify(token, "my_secret");
 
     const tenantId = decodedToken.tenantId;
-    console.log(tenantId);
 
-    const products = await Product.findAll({where:  { tenantId: tenantId }});
+    const products = await Product.findAll({
+      where: { tenantId: tenantId },
+    });
 
-    return response.status(200).json(products)
-  } catch(error) {
-    console.error('Error retreaving products:', error)
-    return response.status(500).json({error: 'Internal server error'})
+    return response.status(200).json(products);
+  } catch (error) {
+    console.error("Error retreaving products:", error);
+    return response
+      .status(500)
+      .json({ error: "Internal server error" });
   }
 });
 
-const getTokenFrom = request => {
-  const authorization = request.get('authorization');
-  if(authorization && authorization.startsWith('Bearer ')) {
-    return authorization.replace('Bearer ', '')
+// post order
+router.post("/orders", async (request, response) => {
+  const token = getTokenFrom(request);
+  if (!token) {
+    return response
+      .status(401)
+      .json({ error: "Unauthorized" });
   }
-  return null
-}
+
+  try {
+    const decodedToken = jwt.verify(token, "my_secret");
+    console.log(decodedToken);
+
+    const tenantId = decodedToken.tenantId;
+    const user = decodedToken.username;
+    console.log(user);
+
+    const { productName, amount, quantity, userId } =
+      request.body;
+
+    const newInvoice = await Invoice.create({
+      amount: amount,
+      status: "ordered",
+      productName: productName,
+      quantity: quantity,
+      tenantId: tenantId,
+      username: user,
+      userId: userId,
+    });
+
+    response.status(201).json({
+      invoice: newInvoice,
+      message: "Create invoice successfully",
+    });
+  } catch (error) {
+    response.status(500).json({ error: error.message });
+  }
+});
+
+const getTokenFrom = (request) => {
+  const authorization = request.get("authorization");
+  if (
+    authorization &&
+    authorization.startsWith("Bearer ")
+  ) {
+    return authorization.replace("Bearer ", "");
+  }
+  return null;
+};
 
 module.exports = router;

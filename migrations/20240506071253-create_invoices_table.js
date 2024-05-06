@@ -1,28 +1,43 @@
+// migrations/<timestamp>-create_invoices_table.js
+
 "use strict";
+
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    await queryInterface.createTable("Products", {
+    await queryInterface.createTable("Invoices", {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
         type: Sequelize.INTEGER,
       },
-      name: {
-        type: Sequelize.STRING,
-        allowNull: false,
-      },
-      price: {
+      amount: {
         type: Sequelize.FLOAT,
         allowNull: false,
       },
-      description: {
+      status: {
+        type: Sequelize.ENUM("ordered", "cancelled"),
+        defaultValue: "ordered",
+      },
+      productName: {
         type: Sequelize.STRING,
-        allowNull: true,
+        allowNull: false,
+      },
+      quantity: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
       },
       tenantId: {
         type: Sequelize.UUID,
-        allowNull: false, // Ensure tenantId is not null
+        allowNull: false,
+      },
+      username: {
+        type: Sequelize.STRING,
+        allowNull: false,
+      },
+      userId: {
+        type: Sequelize.UUID,
+        allowNull: false,
       },
       createdAt: {
         allowNull: false,
@@ -33,20 +48,9 @@ module.exports = {
         type: Sequelize.DATE,
       },
     });
-
-    // Add foreign key constraint
-    await queryInterface.addConstraint("Products", {
-      fields: ["tenantId"],
-      type: "foreign key",
-      name: "fk_tenantId_product",
-      references: {
-        table: "Tenants",
-        field: "id",
-      },
-      onDelete: "CASCADE", // Ensure referential integrity
-    });
   },
+
   down: async (queryInterface, Sequelize) => {
-    await queryInterface.dropTable("Products");
+    await queryInterface.dropTable("Invoices");
   },
 };
