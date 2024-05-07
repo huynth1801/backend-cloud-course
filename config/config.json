@@ -1,7 +1,7 @@
 {
   "development": {
     "username": "root",
-    "password": "admin",
+    "password": "root",
     "database": "cloud-multi-tenancy",
     "host": "127.0.0.1",
     "dialect": "mysql"

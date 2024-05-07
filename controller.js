@@ -11,8 +11,11 @@ const { Product } = require("./models");
 const { Invoice } = require("./models");
 const jwt = require("jsonwebtoken");
 const { where } = require("sequelize");
+const middlewareController = require("./utils/middleware");
 
 const router = express.Router();
+
+let refreshTokens = [];
 
 router.get("/", function (request, response) {
   // Render login template
@@ -84,7 +87,6 @@ router.post(
       // Get info from request body
       const { name, price, description } = request.body;
       const { tenantId } = request.params;
-      console.log(tenantId);
 
       // Generate new product
       const newProduct = await Product.create({
@@ -137,7 +139,6 @@ router.post("/login", async (request, response) => {
 
     // Trích xuất tenantId từ user hoặc từ cơ sở dữ liệu nếu cần
     const tenantId = user.TenantId;
-    console.log(tenantId);
 
     const userForToken = {
       username: user.username,
@@ -145,13 +146,21 @@ router.post("/login", async (request, response) => {
       tenantId: tenantId,
     };
 
-    const token = jwt.sign(userForToken, "my_secret", {
-      expiresIn: 60 * 60,
+    const accessToken = generateAccessToken(userForToken);
+    const refreshToken = generateRefreshToken(userForToken);
+    refreshTokens.push(refreshToken);
+
+    response.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: false,
+      path: "/",
+      sameSite: "strict",
     });
 
     return response.status(200).json({
       name: username,
-      token: token,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
     });
   } catch (error) {
     console.error("Error logging in:", error);
@@ -160,6 +169,84 @@ router.post("/login", async (request, response) => {
       .json({ error: "Internal server error" });
   }
 });
+
+router.post("/refresh", async (request, response) => {
+  const refreshToken = request.cookies?.refreshToken;
+
+  if (!refreshToken) {
+    return response
+      .status(401)
+      .json("You're not authenticated");
+  }
+
+  if (!refreshTokens.includes(refreshToken)) {
+    return response
+      .status(403)
+      .json("Refresh token is not a valid");
+  }
+
+  refreshTokens = refreshTokens.filter(
+    (token) => token !== refreshToken
+  );
+
+  jwt.verify(
+    refreshToken,
+    "my_refresh_secret",
+    (error, user) => {
+      if (error) {
+        if (error.name === "TokenExpiredError") {
+          // If refresh token is expired, return unauthorized
+          return response
+            .status(401)
+            .json("Refresh token expired");
+        } else {
+          // If refresh token is invalid for any other reason, return error
+          console.error(error);
+          return response
+            .status(500)
+            .json("Internal server error");
+        }
+      }
+
+      const userData = {
+        username: user.username,
+        id: user.id,
+        tenantId: user.tenantId,
+      };
+
+      const newAccessToken = generateAccessToken(userData);
+
+      const newRefreshToken =
+        generateRefreshToken(userData);
+
+      refreshTokens.push(newRefreshToken);
+      response.cookie("refreshToken", newRefreshToken, {
+        httpOnly: true,
+        secure: false,
+        path: "/",
+        sameSite: "strict",
+      });
+
+      // Return the new access token
+      response
+        .status(200)
+        .json({ accessToken: newAccessToken });
+    }
+  );
+});
+
+// log out
+router.post(
+  "/logout",
+  middlewareController.verifyToken,
+  async (request, response) => {
+    response.clearCookie("refreshToken");
+    refreshTokens = refreshTokens.filter(
+      (token) => token !== request.cookies?.refreshToken
+    );
+    response.status(200).json("Logged out successfully");
+  }
+);
 
 router.get("/products", async (request, response) => {
   const token = getTokenFrom(request);
@@ -203,9 +290,7 @@ router.post("/orders", async (request, response) => {
     const username = decodedToken.username;
     const userId = decodedToken.id;
 
-
-    const { productName, amount, quantity } =
-      request.body;
+    const { productName, amount, quantity } = request.body;
 
     const newInvoice = await Invoice.create({
       amount: amount,
@@ -226,6 +311,41 @@ router.post("/orders", async (request, response) => {
   }
 });
 
+// get orders by userid
+router.get(
+  "/orders/:tenantId/:userId",
+  async (request, response) => {
+    const accessToken = getTokenFrom(request);
+    if (!accessToken) {
+      return response
+        .status(401)
+        .json({ error: "Unauthorized" });
+    }
+
+    try {
+      const decodedToken = jwt.verify(
+        accessToken,
+        "my_secret"
+      );
+
+      const tenantId = decodedToken.tenantId;
+      const userId = decodedToken.id;
+      // Tìm tất cả các đơn hàng có userId và tenantId tương ứng
+      const orders = await Invoice.findAll({
+        where: { userId: userId, tenantId: tenantId },
+      });
+
+      // Trả về các đơn hàng đã tìm thấy
+      response.status(200).json({
+        orders: orders,
+        message: "Get orders successfully",
+      });
+    } catch (error) {
+      response.status(500).json({ error: error.message });
+    }
+  }
+);
+
 const getTokenFrom = (request) => {
   const authorization = request.get("authorization");
   if (
@@ -235,6 +355,22 @@ const getTokenFrom = (request) => {
     return authorization.replace("Bearer ", "");
   }
   return null;
+};
+
+const generateAccessToken = (data) => {
+  const access_token = jwt.sign(data, "my_secret", {
+    expiresIn: "1h",
+  });
+  return access_token;
+};
+
+const generateRefreshToken = (data) => {
+  const refresh_token = jwt.sign(
+    data,
+    "my_refresh_secret",
+    { expiresIn: "7d" }
+  );
+  return refresh_token;
 };
 
 module.exports = router;

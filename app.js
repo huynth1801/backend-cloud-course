@@ -4,15 +4,23 @@ const session = require("express-session");
 const path = require("path");
 const controller = require("./controller");
 const cors = require("cors");
-const Sequelize = require('sequelize')
+const Sequelize = require("sequelize");
+const cookieParser = require("cookie-parser");
 
 const app = express();
+app.use(cookieParser());
 
 app.use(
   session({
     secret: "secret",
-    resave: true,
-    saveUninitialized: true,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: false,
+      path: "/",
+      sameSite: "strict",
+    },
   })
 );
 
@@ -31,7 +39,6 @@ app.use(
 // }).catch((error) => {
 //   console.error('Unable to connect to the database: ', error);
 // });
-
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
